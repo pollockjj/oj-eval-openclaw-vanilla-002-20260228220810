@@ -468,7 +468,7 @@ std::ostream &operator<<(std::ostream &os, const int2048 &x) {
   os << x.d.back();
   char buf[16];
   for (int i = (int)x.d.size() - 2; i >= 0; --i) {
-    std::snprintf(buf, sizeof(buf), "%06d", x.d[i]);
+    std::snprintf(buf, sizeof(buf), "%05d", x.d[i]);
     os << buf;
   }
   return os;

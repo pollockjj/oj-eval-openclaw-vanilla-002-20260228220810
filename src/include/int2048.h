@@ -20,8 +20,8 @@
 namespace sjtu {
 class int2048 {
 private:
-  static const int BASE = 1000000;
-  static const int WIDTH = 6;
+  static const int BASE = 100000;
+  static const int WIDTH = 5;
 
   // sign == true means negative
   bool sign;
