@@ -19,7 +19,21 @@
 
 namespace sjtu {
 class int2048 {
-  // todo
+private:
+  static const int BASE = 10000;
+  static const int WIDTH = 4;
+
+  // sign == true means negative
+  bool sign;
+  std::vector<int> d; // little-endian in BASE
+
+  void trim();
+  static int absCmp(const int2048 &, const int2048 &);
+  static int2048 absAdd(const int2048 &, const int2048 &);
+  static int2048 absSub(const int2048 &, const int2048 &); // requires |a| >= |b|
+  static int2048 absMulInt(const int2048 &, int);
+  static void divModAbs(const int2048 &, const int2048 &, int2048 &, int2048 &);
+
 public:
   // Constructors
   int2048();
