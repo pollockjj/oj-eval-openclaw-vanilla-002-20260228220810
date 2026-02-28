@@ -214,13 +214,46 @@ void int2048::divModAbs(const int2048 &a, const int2048 &b, int2048 &q, int2048 
       ans = (int)(rHi / bHi);
       if (ans >= BASE) ans = BASE - 1;
 
-      int2048 t = absMulInt(b, ans);
-      while (absCmp(t, r) > 0) {
+      std::vector<int> prod(b.d.size() + 1, 0);
+      auto buildProd = [&](int mul) {
+        long long carry = 0;
+        for (int j = 0; j < (int)b.d.size(); ++j) {
+          long long cur = 1LL * b.d[j] * mul + carry;
+          prod[j] = (int)(cur % BASE);
+          carry = cur / BASE;
+        }
+        prod[b.d.size()] = (int)carry;
+        while (!prod.empty() && prod.back() == 0) prod.pop_back();
+      };
+      auto cmpProdR = [&]() {
+        if (prod.size() != r.d.size()) return prod.size() < r.d.size() ? -1 : 1;
+        for (int k = (int)prod.size() - 1; k >= 0; --k) {
+          if (prod[k] != r.d[k]) return prod[k] < r.d[k] ? -1 : 1;
+        }
+        return 0;
+      };
+
+      buildProd(ans);
+      while (cmpProdR() > 0) {
         --ans;
-        t = absMulInt(b, ans);
+        buildProd(ans);
       }
       q.d[i] = ans;
-      if (ans) r = absSub(r, t);
+      if (ans) {
+        int borrow = 0;
+        for (int j = 0; j < (int)r.d.size(); ++j) {
+          int y = j < (int)prod.size() ? prod[j] : 0;
+          int x = r.d[j] - borrow;
+          if (x < y) {
+            x += BASE;
+            borrow = 1;
+          } else {
+            borrow = 0;
+          }
+          r.d[j] = x - y;
+        }
+        r.trim();
+      }
     }
   }
 
