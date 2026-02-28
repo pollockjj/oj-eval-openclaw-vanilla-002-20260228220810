@@ -2,9 +2,17 @@
 
 namespace sjtu {
 
-static const double PI = 3.141592653589793238462643383279502884;
+static long long modPow(long long a, long long e, long long mod) {
+  long long r = 1;
+  while (e) {
+    if (e & 1) r = (long long)((__int128)r * a % mod);
+    a = (long long)((__int128)a * a % mod);
+    e >>= 1;
+  }
+  return r;
+}
 
-static void fft(std::vector<std::complex<double>> &a, bool invert) {
+static void ntt(std::vector<int> &a, bool invert, int mod, int primitiveRoot) {
   int n = (int)a.size();
   for (int i = 1, j = 0; i < n; ++i) {
     int bit = n >> 1;
@@ -14,31 +22,81 @@ static void fft(std::vector<std::complex<double>> &a, bool invert) {
     }
     j ^= bit;
     if (i < j) {
-      std::complex<double> tmp = a[i];
+      int t = a[i];
       a[i] = a[j];
-      a[j] = tmp;
+      a[j] = t;
     }
   }
 
   for (int len = 2; len <= n; len <<= 1) {
-    double ang = 2 * PI / len * (invert ? -1 : 1);
-    std::complex<double> wlen(std::cos(ang), std::sin(ang));
+    long long wlen = modPow(primitiveRoot, (mod - 1) / len, mod);
+    if (invert) wlen = modPow(wlen, mod - 2, mod);
     for (int i = 0; i < n; i += len) {
-      std::complex<double> w(1.0, 0.0);
+      long long w = 1;
       int half = len >> 1;
       for (int j = 0; j < half; ++j) {
-        std::complex<double> u = a[i + j];
-        std::complex<double> v = a[i + j + half] * w;
-        a[i + j] = u + v;
-        a[i + j + half] = u - v;
-        w *= wlen;
+        int u = a[i + j];
+        int v = (int)((__int128)a[i + j + half] * w % mod);
+        int x = u + v;
+        if (x >= mod) x -= mod;
+        int y = u - v;
+        if (y < 0) y += mod;
+        a[i + j] = x;
+        a[i + j + half] = y;
+        w = (long long)((__int128)w * wlen % mod);
       }
     }
   }
 
   if (invert) {
-    for (int i = 0; i < n; ++i) a[i] /= n;
+    long long invN = modPow(n, mod - 2, mod);
+    for (int i = 0; i < n; ++i) a[i] = (int)((__int128)a[i] * invN % mod);
   }
+}
+
+static std::vector<long long> convolution(const std::vector<int> &a, const std::vector<int> &b) {
+  const int MOD1 = 998244353;
+  const int ROOT1 = 3;
+  const int MOD2 = 1004535809;
+  const int ROOT2 = 3;
+
+  int n = 1;
+  while (n < (int)a.size() + (int)b.size()) n <<= 1;
+
+  std::vector<int> x1(n, 0), y1(n, 0), x2(n, 0), y2(n, 0);
+  for (int i = 0; i < (int)a.size(); ++i) {
+    x1[i] = a[i] % MOD1;
+    x2[i] = a[i] % MOD2;
+  }
+  for (int i = 0; i < (int)b.size(); ++i) {
+    y1[i] = b[i] % MOD1;
+    y2[i] = b[i] % MOD2;
+  }
+
+  ntt(x1, false, MOD1, ROOT1);
+  ntt(y1, false, MOD1, ROOT1);
+  ntt(x2, false, MOD2, ROOT2);
+  ntt(y2, false, MOD2, ROOT2);
+
+  for (int i = 0; i < n; ++i) {
+    x1[i] = (int)((__int128)x1[i] * y1[i] % MOD1);
+    x2[i] = (int)((__int128)x2[i] * y2[i] % MOD2);
+  }
+
+  ntt(x1, true, MOD1, ROOT1);
+  ntt(x2, true, MOD2, ROOT2);
+
+  long long invMOD1inMOD2 = modPow(MOD1, MOD2 - 2, MOD2);
+  std::vector<long long> c(n);
+  for (int i = 0; i < n; ++i) {
+    long long a1 = x1[i];
+    long long a2 = x2[i];
+    long long t = (a2 - a1) % MOD2;
+    if (t < 0) t += MOD2;
+    t = (long long)((__int128)t * invMOD1inMOD2 % MOD2);
+    c[i] = a1 + (long long)MOD1 * t;
+  }
+  return c;
 }
 
 void int2048::trim() {
@@ -143,22 +201,26 @@ void int2048::divModAbs(const int2048 &a, const int2048 &b, int2048 &q, int2048 
     }
     r.trim();
 
-    int l = 0, rr = BASE - 1, ans = 0;
-    while (l <= rr) {
-      int mid = (l + rr) >> 1;
-      int2048 t = absMulInt(b, mid);
-      if (absCmp(t, r) <= 0) {
-        ans = mid;
-        l = mid + 1;
+    int ans = 0;
+    if (absCmp(r, b) >= 0) {
+      int m = (int)b.d.size();
+      long long rHi = 0;
+      if ((int)r.d.size() > m) {
+        rHi = 1LL * r.d[m] * BASE + r.d[m - 1];
       } else {
-        rr = mid - 1;
+        rHi = r.d[m - 1];
       }
-    }
+      long long bHi = b.d[m - 1];
+      ans = (int)(rHi / bHi);
+      if (ans >= BASE) ans = BASE - 1;
 
-    q.d[i] = ans;
-    if (ans) {
       int2048 t = absMulInt(b, ans);
-      r = absSub(r, t);
+      while (absCmp(t, r) > 0) {
+        --ans;
+        t = absMulInt(b, ans);
+      }
+      q.d[i] = ans;
+      if (ans) r = absSub(r, t);
     }
   }
 
@@ -299,26 +361,15 @@ int2048 &int2048::operator*=(const int2048 &o) {
       }
     }
   } else {
-    int sz = 1;
-    while (sz < n + m) sz <<= 1;
-    std::vector<std::complex<double>> fa(sz), fb(sz);
-    for (int i = 0; i < n; ++i) fa[i] = std::complex<double>((double)d[i], 0.0);
-    for (int i = 0; i < m; ++i) fb[i] = std::complex<double>((double)o.d[i], 0.0);
-
-    fft(fa, false);
-    fft(fb, false);
-    for (int i = 0; i < sz; ++i) fa[i] *= fb[i];
-    fft(fa, true);
-
-    res.assign(n + m + 2, 0);
+    std::vector<long long> conv = convolution(d, o.d);
+    res.assign(conv.size() + 2, 0);
     long long carry = 0;
-    for (int i = 0; i < n + m; ++i) {
-      long long v = (long long)(fa[i].real() + 0.5);
-      long long cur = v + carry;
+    for (int i = 0; i < (int)conv.size(); ++i) {
+      long long cur = conv[i] + carry;
       res[i] = (int)(cur % BASE);
       carry = cur / BASE;
     }
-    int idx = n + m;
+    int idx = (int)conv.size();
     while (carry) {
       if (idx >= (int)res.size()) res.push_back(0);
       long long cur = res[idx] + carry;
